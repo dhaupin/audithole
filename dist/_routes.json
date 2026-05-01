@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "description": "Route rules for AuditHole. Static assets served from dist/, everything else to Functions.",
+  "include": [
+    "/api/*",
+    "/d/*",
+    "/t/*"
+  ],
+  "exclude": [
+    "/audithole.min.js",
+    "/audithole.dev.js",
+    "/index.html",
+    "/dashboard.html",
+    "/*.css",
+    "/*.ico",
+    "/*.png",
+    "/*.svg",
+    "/*.woff2"
+  ]
+}

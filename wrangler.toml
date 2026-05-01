@@ -2,20 +2,24 @@ name = "audithole"
 compatibility_date = "2024-01-01"
 pages_build_output_dir = "dist"
 
-[[kv_namespaces]]
-binding = "AUDITHOLE_KV"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
-preview_id = "REPLACE_WITH_YOUR_KV_PREVIEW_ID"
+# KV namespace -- create yours with:
+#   npx wrangler kv:namespace create AUDITHOLE_KV
+#   npx wrangler kv:namespace create AUDITHOLE_KV --preview
+# Then paste the IDs below. Both are required.
+#
+# [[kv_namespaces]]
+# binding = "AUDITHOLE_KV"
+# id = "YOUR_KV_NAMESPACE_ID_HERE"
+# preview_id = "YOUR_KV_PREVIEW_ID_HERE"
 
-# Environment variables -- set ALL of these in CF Pages dashboard, not here.
-# Never commit secrets to the repo.
+# All secrets go in Cloudflare Pages dashboard:
+#   Settings -> Environment Variables -> Production
 #
 # Required:
-#   AUDITHOLE_SECRET     - API auth key for /api/sessions, /api/bans etc.
-#   DASHBOARD_TOKEN      - Path token for dashboard access at /d/{token}
-#                          Make it long and random. Rotating it invalidates all sessions.
-#                          Example: openssl rand -hex 24
+#   AUDITHOLE_SECRET   - API auth key for admin endpoints
+#   DASHBOARD_TOKEN    - Token for /d/{token} dashboard URL
+#                        Generate: openssl rand -hex 24
 #
 # Optional (fail2ban plugin):
-#   FAIL2BAN_BRIDGE_URL    - URL of your fail2ban bridge server
-#   FAIL2BAN_BRIDGE_SECRET - Shared secret between CF and your bridge
+#   FAIL2BAN_BRIDGE_URL    - URL of your bridge server
+#   FAIL2BAN_BRIDGE_SECRET - Shared secret with bridge
