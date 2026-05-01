@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AuditHole</title>
+<meta name="robots" content="noindex, nofollow" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --black:  #0c0c0d;
+    --surface:#131316;
+    --card:   #1a1a1f;
+    --border: #2a2a32;
+    --muted:  #52525e;
+    --dim:    #8888a0;
+    --text:   #e8e8f0;
+    --bright: #ffffff;
+    --green:  #00e87a;
+    --amber:  #f5a623;
+    --red:    #ff4444;
+    --blue:   #4488ff;
+    --mono:   'IBM Plex Mono', monospace;
+    --sans:   'Geist', sans-serif;
+  }
+  body { background: var(--black); color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.5; }
+
+  /* Layout */
+  .shell { display: flex; height: 100vh; overflow: hidden; }
+  .sidebar { width: 220px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .main { flex: 1; overflow-y: auto; }
+
+  /* Sidebar */
+  .sidebar-logo { padding: 20px 18px 16px; border-bottom: 1px solid var(--border); }
+  .logo-text { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--bright); display: flex; align-items: center; gap: 8px; }
+  .logo-dot { width: 7px; height: 7px; background: var(--green); border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+  .sidebar-nav { padding: 12px 0; flex: 1; overflow-y: auto; }
+  .nav-section { padding: 6px 18px 4px; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 18px; cursor: pointer; color: var(--dim); font-size: 13px; transition: background .1s, color .1s; border-left: 2px solid transparent; }
+  .nav-item:hover { background: rgba(255,255,255,.03); color: var(--text); }
+  .nav-item.active { color: var(--green); border-left-color: var(--green); background: rgba(0,232,122,.05); }
+  .nav-item .icon { font-size: 15px; flex-shrink: 0; }
+  .sidebar-footer { padding: 14px 18px; border-top: 1px solid var(--border); }
+  .stat-mini { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  .stat-mini span { color: var(--dim); }
+
+  /* Topbar */
+  .topbar { height: 52px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; gap: 16px; position: sticky; top: 0; background: var(--black); z-index: 10; }
+  .topbar-title { font-size: 14px; font-weight: 500; color: var(--bright); flex: 1; }
+  .topbar-actions { display: flex; gap: 10px; align-items: center; }
+  .btn { font-family: var(--mono); font-size: 12px; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--dim); cursor: pointer; transition: all .15s; }
+  .btn:hover { border-color: var(--muted); color: var(--text); }
+  .btn.primary { background: var(--green); border-color: var(--green); color: var(--black); font-weight: 600; }
+  .btn.primary:hover { background: #00ff88; }
+
+  /* Content */
+  .content { padding: 24px; }
+
+  /* Stats row */
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
+  .stat-card .label { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+  .stat-card .value { font-family: var(--mono); font-size: 26px; font-weight: 600; color: var(--bright); }
+  .stat-card .delta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .stat-card.green .value { color: var(--green); }
+  .stat-card.amber .value { color: var(--amber); }
+  .stat-card.red .value   { color: var(--red); }
+
+  /* Sessions table */
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .panel-header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .panel-title { font-family: var(--mono); font-size: 12px; color: var(--dim); }
+  .panel-badge { font-family: var(--mono); font-size: 11px; background: rgba(0,232,122,.1); color: var(--green); border: 1px solid rgba(0,232,122,.2); padding: 2px 8px; border-radius: 20px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--border); background: var(--surface); }
+  td { padding: 11px 16px; border-bottom: 1px solid rgba(42,42,50,.5); font-size: 13px; color: var(--dim); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,.02); cursor: pointer; }
+  .mono { font-family: var(--mono); font-size: 12px; }
+
+  .badge { font-family: var(--mono); font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; }
+  .badge.t0 { background: rgba(136,136,160,.1); color: var(--muted); }
+  .badge.t1 { background: rgba(68,136,255,.1); color: var(--blue); }
+  .badge.t2 { background: rgba(245,166,35,.1); color: var(--amber); }
+  .badge.t3 { background: rgba(255,68,68,.1); color: var(--red); }
+
+  .score-bar { display: flex; align-items: center; gap: 8px; }
+  .score-track { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; max-width: 80px; }
+  .score-fill { height: 100%; border-radius: 2px; transition: width .3s; }
+
+  /* Detail panel */
+  .detail-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 50; }
+  .detail-overlay.open { display: flex; align-items: flex-start; justify-content: flex-end; }
+  .detail-drawer { width: 420px; height: 100vh; background: var(--surface); border-left: 1px solid var(--border); overflow-y: auto; }
+  .detail-header { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .detail-header h3 { font-family: var(--mono); font-size: 13px; color: var(--bright); }
+  .close-btn { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; line-height: 1; padding: 2px 6px; }
+  .close-btn:hover { color: var(--text); }
+  .detail-body { padding: 20px 24px; }
+  .detail-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid rgba(42,42,50,.5); gap: 16px; }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-key { font-family: var(--mono); font-size: 11px; color: var(--muted); flex-shrink: 0; padding-top: 1px; }
+  .detail-val { font-size: 12px; color: var(--text); text-align: right; word-break: break-all; }
+  .signal-list { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+  .signal-chip { font-family: var(--mono); font-size: 10px; background: rgba(255,68,68,.1); color: var(--red); border: 1px solid rgba(255,68,68,.2); padding: 2px 6px; border-radius: 4px; }
+  .event-list { list-style: none; margin-top: 8px; }
+  .event-list li { font-family: var(--mono); font-size: 11px; color: var(--muted); padding: 4px 0; border-bottom: 1px solid rgba(42,42,50,.3); display: flex; gap: 12px; }
+  .event-list .et { color: var(--dim); }
+  .event-list .ms { color: var(--muted); min-width: 52px; }
+
+  /* Empty / loading */
+  .empty { padding: 48px; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 13px; }
+  .loading { opacity: .5; }
+
+  /* Filter bar */
+  .filter-bar { display: flex; gap: 10px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .filter-bar input { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; color: var(--text); font-family: var(--mono); font-size: 12px; outline: none; width: 200px; }
+  .filter-bar input:focus { border-color: var(--green); }
+  .filter-bar select { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; color: var(--dim); font-family: var(--mono); font-size: 12px; outline: none; cursor: pointer; }
+
+  @media (max-width: 900px) {
+    .sidebar { display: none; }
+    .stats-row { grid-template-columns: repeat(2,1fr); }
+    .detail-drawer { width: 100vw; }
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-text"><span class="logo-dot"></span>AUDITHOLE</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Views</div>
+      <div class="nav-item active" onclick="showView('sessions')">
+        <span class="icon">📋</span> Sessions
+      </div>
+      <div class="nav-item" onclick="showView('slugs')">
+        <span class="icon">🔗</span> Slugs
+      </div>
+      <div class="nav-item" onclick="showView('bans')">
+        <span class="icon">🚫</span> Bans
+      </div>
+      <div class="nav-section">Tools</div>
+      <div class="nav-item" onclick="showView('sluggen')">
+        <span class="icon">⚡</span> Generate Slug
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="stat-mini">Sessions today: <span id="sb-today">—</span></div>
+      <div class="stat-mini">Active bans: <span id="sb-bans">—</span></div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <!-- Sessions view -->
+    <div id="view-sessions">
+      <div class="topbar">
+        <div class="topbar-title">Sessions</div>
+        <div class="topbar-actions">
+          <button class="btn" onclick="loadSessions()">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="content">
+        <div class="stats-row" id="stats-row">
+          <div class="stat-card"><div class="label">Total Sessions</div><div class="value" id="s-total">—</div></div>
+          <div class="stat-card amber"><div class="label">Tier 1+</div><div class="value" id="s-t1">—</div></div>
+          <div class="stat-card red"><div class="label">Tier 3</div><div class="value" id="s-t3">—</div></div>
+          <div class="stat-card green"><div class="label">Avg Score</div><div class="value" id="s-avg">—</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Recent Sessions</span>
+            <span class="panel-badge" id="session-count">0</span>
+          </div>
+          <div class="filter-bar">
+            <input type="text" id="filter-input" placeholder="Filter by UA, slug, score..." oninput="filterSessions()" />
+            <select id="filter-tier" onchange="filterSessions()">
+              <option value="">All tiers</option>
+              <option value="0">Tier 0 (clean)</option>
+              <option value="1">Tier 1</option>
+              <option value="2">Tier 2</option>
+              <option value="3">Tier 3</option>
+            </select>
+          </div>
+          <div id="sessions-table-wrap">
+            <div class="empty">Loading sessions...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slugs view -->
+    <div id="view-slugs" style="display:none">
+      <div class="topbar">
+        <div class="topbar-title">Attribution Slugs</div>
+      </div>
+      <div class="content">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Enter slug to inspect</span></div>
+          <div style="padding:20px;display:flex;gap:10px;">
+            <input id="slug-input" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 14px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;flex:1;" placeholder="my-slug-abc123" />
+            <button class="btn primary" onclick="loadSlug()">Load</button>
+          </div>
+          <div id="slug-result"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bans view -->
+    <div id="view-bans" style="display:none">
+      <div class="topbar">
+        <div class="topbar-title">Active Bans</div>
+        <div class="topbar-actions"><button class="btn" onclick="loadBans()">↻ Refresh</button></div>
+      </div>
+      <div class="content">
+        <div class="panel">
+          <div id="bans-table-wrap"><div class="empty">Loading bans...</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slug generator view -->
+    <div id="view-sluggen" style="display:none">
+      <div class="topbar"><div class="topbar-title">Generate Attribution Slug</div></div>
+      <div class="content">
+        <div class="panel" style="max-width:500px">
+          <div class="panel-header"><span class="panel-title">New slug</span></div>
+          <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+            <div>
+              <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em;">Label (optional)</div>
+              <input id="sluglabel-input" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 14px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;" placeholder="contact-form-42" />
+            </div>
+            <button class="btn primary" onclick="generateSlug()" style="align-self:flex-start;">Generate</button>
+            <div id="slug-generated" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;">
+              <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px;">TRAP URL</div>
+              <div id="slug-url" style="font-family:var(--mono);font-size:13px;color:var(--green);word-break:break-all;"></div>
+              <button class="btn" style="margin-top:12px;" onclick="copySlugUrl()">Copy</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Session detail drawer -->
+<div class="detail-overlay" id="detail-overlay" onclick="closeDetail(event)">
+  <div class="detail-drawer" onclick="event.stopPropagation()">
+    <div class="detail-header">
+      <h3 id="detail-title">Session</h3>
+      <button class="close-btn" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="detail-body" id="detail-body"></div>
+  </div>
+</div>
+
+<script>
+  // Token is injected server-side into the page.
+  // The dashboard is served only when the path matches /d/{DASHBOARD_TOKEN}.
+  const SECRET = window.__AH_SECRET || '';
+  const API = (path) => `/api${path}`;
+  const HEADERS = { 'x-audithole-secret': SECRET, 'Content-Type': 'application/json' };
+
+  let allSessions = [];
+
+  // -- View routing --
+  function showView(name) {
+    ['sessions','slugs','bans','sluggen'].forEach(v => {
+      document.getElementById('view-' + v).style.display = v === name ? '' : 'none';
+    });
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+    if (name === 'sessions') loadSessions();
+    if (name === 'bans') loadBans();
+  }
+
+  // -- Sessions --
+  async function loadSessions() {
+    const wrap = document.getElementById('sessions-table-wrap');
+    wrap.innerHTML = '<div class="empty loading">Loading...</div>';
+    try {
+      const res = await fetch(API('/sessions?limit=100'), { headers: HEADERS });
+      if (res.status === 401) { wrap.innerHTML = '<div class="empty">Unauthorized. Check your dashboard token.</div>'; return; }
+      allSessions = await res.json();
+      renderStats(allSessions);
+      renderSessionsTable(allSessions);
+      document.getElementById('session-count').textContent = allSessions.length;
+      document.getElementById('sb-today').textContent = allSessions.length;
+    } catch(e) {
+      wrap.innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+    }
+  }
+
+  function renderStats(sessions) {
+    document.getElementById('s-total').textContent = sessions.length;
+    document.getElementById('s-t1').textContent = sessions.filter(s => s.trapTier >= 1).length;
+    document.getElementById('s-t3').textContent = sessions.filter(s => s.trapTier >= 3).length;
+    const scores = sessions.filter(s => s.fingerprint).map(s => s.fingerprint.score);
+    document.getElementById('s-avg').textContent = scores.length
+      ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length)
+      : '—';
+  }
+
+  function filterSessions() {
+    const q    = document.getElementById('filter-input').value.toLowerCase();
+    const tier = document.getElementById('filter-tier').value;
+    const filtered = allSessions.filter(s => {
+      const matchTier = tier === '' || String(s.trapTier) === tier;
+      const matchQ    = !q ||
+        (s.ua || '').toLowerCase().includes(q) ||
+        (s.slug || '').toLowerCase().includes(q) ||
+        String(s.fingerprint?.score || '').includes(q);
+      return matchTier && matchQ;
+    });
+    renderSessionsTable(filtered);
+    document.getElementById('session-count').textContent = filtered.length;
+  }
+
+  function renderSessionsTable(sessions) {
+    const wrap = document.getElementById('sessions-table-wrap');
+    if (!sessions.length) { wrap.innerHTML = '<div class="empty">No sessions found.</div>'; return; }
+    const rows = sessions.map(s => {
+      const score   = s.fingerprint?.score ?? '—';
+      const tier    = s.trapTier || 0;
+      const scoreColor = score >= 90 ? '#ff4444' : score >= 70 ? '#f5a623' : score >= 40 ? '#4488ff' : '#8888a0';
+      const scorePct  = typeof score === 'number' ? score : 0;
+      const ago = s.created ? timeAgo(s.created) : '—';
+      const slug = s.slug ? `<span class="mono" style="color:var(--blue)">${esc(s.slug)}</span>` : '<span style="color:var(--muted)">—</span>';
+      const ua = (s.ua || '').slice(0, 60);
+
+      return `<tr onclick="showDetail('${s.id}')">
+        <td class="mono" style="color:var(--muted)">${s.id.slice(0,12)}…</td>
+        <td>${slug}</td>
+        <td>
+          <div class="score-bar">
+            <div class="score-track"><div class="score-fill" style="width:${scorePct}%;background:${scoreColor}"></div></div>
+            <span class="mono" style="color:${scoreColor}">${score}</span>
+          </div>
+        </td>
+        <td><span class="badge t${tier}">T${tier}</span></td>
+        <td style="color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.ua || '')}">${esc(ua)}</span></td>
+        <td class="mono" style="color:var(--muted)">${ago}</td>
+      </tr>`;
+    }).join('');
+
+    wrap.innerHTML = `<table>
+      <thead><tr>
+        <th>ID</th><th>Slug</th><th>Score</th><th>Tier</th><th>UA</th><th>Age</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }
+
+  // -- Session detail drawer --
+  function showDetail(id) {
+    const s = allSessions.find(s => s.id === id);
+    if (!s) return;
+    document.getElementById('detail-title').textContent = id.slice(0, 16) + '…';
+    const score  = s.fingerprint?.score ?? '—';
+    const sigs   = s.fingerprint?.signals || [];
+    const events = (s.events || []).slice(0, 30);
+
+    const sigHtml = sigs.length
+      ? `<div class="signal-list">${sigs.map(sig => `<span class="signal-chip">${esc(sig)}</span>`).join('')}</div>`
+      : '<span style="color:var(--muted)">none</span>';
+
+    const evHtml = events.length
+      ? `<ul class="event-list">${events.map(e => `<li><span class="ms">+${e.ms}ms</span><span class="et">${esc(e.type)}</span></li>`).join('')}</ul>`
+      : '<span style="color:var(--muted)">none</span>';
+
+    document.getElementById('detail-body').innerHTML = `
+      <div class="detail-row"><div class="detail-key">Session ID</div><div class="detail-val mono">${esc(s.id)}</div></div>
+      <div class="detail-row"><div class="detail-key">Slug</div><div class="detail-val">${esc(s.slug || '—')}</div></div>
+      <div class="detail-row"><div class="detail-key">Country</div><div class="detail-val">${esc(s.country || '—')}</div></div>
+      <div class="detail-row"><div class="detail-key">Score</div><div class="detail-val mono" style="color:${score>=70?'var(--red)':score>=40?'var(--amber)':'var(--green)'}">${score}</div></div>
+      <div class="detail-row"><div class="detail-key">Trap Tier</div><div class="detail-val"><span class="badge t${s.trapTier||0}">T${s.trapTier||0}</span></div></div>
+      <div class="detail-row"><div class="detail-key">Signals</div><div class="detail-val">${sigHtml}</div></div>
+      <div class="detail-row"><div class="detail-key">Duration</div><div class="detail-val mono">${Math.round((s.duration||0)/1000)}s</div></div>
+      <div class="detail-row"><div class="detail-key">Scroll Depth</div><div class="detail-val mono">${s.maxScrollDepth||0}%</div></div>
+      <div class="detail-row"><div class="detail-key">Clicks</div><div class="detail-val mono">${s.clicks?.total||0}</div></div>
+      <div class="detail-row"><div class="detail-key">Language</div><div class="detail-val">${esc(s.language||'—')}</div></div>
+      <div class="detail-row"><div class="detail-key">Screen</div><div class="detail-val mono">${esc(s.screen||'—')}</div></div>
+      <div class="detail-row"><div class="detail-key">UA</div><div class="detail-val" style="font-size:11px">${esc((s.ua||'').slice(0,200))}</div></div>
+      <div class="detail-row"><div class="detail-key">Created</div><div class="detail-val mono">${s.created ? new Date(s.created).toISOString() : '—'}</div></div>
+      <div class="detail-row" style="flex-direction:column;align-items:flex-start;">
+        <div class="detail-key" style="margin-bottom:8px">Events</div>
+        ${evHtml}
+      </div>
+    `;
+    document.getElementById('detail-overlay').classList.add('open');
+  }
+
+  function closeDetail(e) {
+    if (e && e.target !== document.getElementById('detail-overlay')) return;
+    document.getElementById('detail-overlay').classList.remove('open');
+  }
+
+  // -- Bans --
+  async function loadBans() {
+    const wrap = document.getElementById('bans-table-wrap');
+    wrap.innerHTML = '<div class="empty loading">Loading...</div>';
+    try {
+      const res = await fetch(API('/bans'), { headers: HEADERS });
+      if (res.status === 401) { wrap.innerHTML = '<div class="empty">Unauthorized.</div>'; return; }
+      if (res.status === 404) { wrap.innerHTML = '<div class="empty">fail2ban plugin not active.</div>'; return; }
+      const bans = await res.json();
+      document.getElementById('sb-bans').textContent = bans.length;
+      if (!bans.length) { wrap.innerHTML = '<div class="empty">No active bans.</div>'; return; }
+      const rows = bans.map(b => `<tr>
+        <td class="mono">${esc(b.ip || '—')}</td>
+        <td class="mono" style="color:var(--red)">${b.score||'—'}</td>
+        <td style="font-size:12px;color:var(--muted)">${esc((b.note||'').slice(0,80))}</td>
+        <td class="mono" style="color:var(--muted)">${b.banned_at ? timeAgo(b.banned_at) : '—'}</td>
+      </tr>`).join('');
+      wrap.innerHTML = `<table><thead><tr><th>IP</th><th>Score</th><th>Note</th><th>Banned</th></tr></thead><tbody>${rows}</tbody></table>`;
+    } catch(e) {
+      wrap.innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+    }
+  }
+
+  // -- Slug lookup --
+  async function loadSlug() {
+    const slug = document.getElementById('slug-input').value.trim();
+    if (!slug) return;
+    const res  = document.getElementById('slug-result');
+    res.innerHTML = '<div class="empty loading">Loading...</div>';
+    try {
+      const r = await fetch(API(`/slug/${encodeURIComponent(slug)}`), { headers: HEADERS });
+      const data = await r.json();
+      if (!data.sessions?.length) { res.innerHTML = '<div class="empty">No sessions for this slug.</div>'; return; }
+      allSessions = data.sessions;
+      renderSessionsTable(data.sessions);
+      res.innerHTML = '';
+      document.querySelectorAll('.nav-item')[0].click();
+    } catch(e) {
+      res.innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+    }
+  }
+
+  // -- Slug generator --
+  async function generateSlug() {
+    const label = document.getElementById('sluglabel-input').value.trim();
+    try {
+      const res  = await fetch(API('/slug/create'), {
+        method: 'POST', headers: HEADERS,
+        body: JSON.stringify({ label }),
+      });
+      const data = await res.json();
+      document.getElementById('slug-url').textContent = data.url || '—';
+      document.getElementById('slug-generated').style.display = '';
+    } catch(e) {
+      alert('Error: ' + e.message);
+    }
+  }
+
+  function copySlugUrl() {
+    const url = document.getElementById('slug-url').textContent;
+    navigator.clipboard.writeText(url).then(() => alert('Copied!'));
+  }
+
+  // -- Utils --
+  function esc(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function timeAgo(ts) {
+    const s = Math.round((Date.now() - ts) / 1000);
+    if (s < 60) return s + 's ago';
+    if (s < 3600) return Math.round(s/60) + 'm ago';
+    if (s < 86400) return Math.round(s/3600) + 'h ago';
+    return Math.round(s/86400) + 'd ago';
+  }
+
+  // Init
+  loadSessions();
+</script>
+</body>
+</html>

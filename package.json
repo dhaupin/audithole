@@ -1,0 +1,29 @@
+{
+  "name": "audithole",
+  "version": "0.1.0",
+  "description": "Defensive honeypot and bot fingerprinting layer for Cloudflare Pages. Deploy on your own infrastructure.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev dist --compatibility-date=2024-01-01",
+    "build": "node build.js",
+    "deploy": "wrangler pages deploy dist",
+    "check": "./check.sh"
+  },
+  "keywords": [
+    "honeypot", "bot-detection", "fingerprinting", "security",
+    "cloudflare-pages", "tarpit", "waf", "defense"
+  ],
+  "author": "audithole contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dhaupin/audithole"
+  },
+  "homepage": "https://audithole.pages.dev",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

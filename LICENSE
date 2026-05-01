@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 dhaupin
+Copyright (c) 2025 AuditHole Contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +19,15 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+RESPONSIBLE USE NOTICE (not legally binding, but important):
+
+This software is designed for deployment on infrastructure you own and control.
+It is a defensive security tool in the same category as fail2ban, mod_security,
+and commercial WAF products. Use it that way.
+
+Do not deploy against systems you do not own or have permission to monitor.
+Do not use it to target individuals outside your own user base.
+See docs/ETHICS.md for the full design rationale.
