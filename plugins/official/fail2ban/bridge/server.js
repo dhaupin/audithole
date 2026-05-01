@@ -59,7 +59,8 @@ if (!BRIDGE_SECRET) {
 
 async function banIP(ip, note = '') {
   // Validate IP format before passing to shell
-  if (!/^[\d.a-fA-F:]+$/.test(ip)) throw new Error('Invalid IP format');
+  const { isIP } = await import('net');
+  if (!isIP(ip)) throw new Error('Invalid IP format: ' + ip);
   const cmd = `fail2ban-client set ${JAIL_NAME} banip ${ip}`;
   if (DEBUG) console.log('[bridge] Running:', cmd);
   await execAsync(cmd);
@@ -67,7 +68,8 @@ async function banIP(ip, note = '') {
 }
 
 async function unbanIP(ip) {
-  if (!/^[\d.a-fA-F:]+$/.test(ip)) throw new Error('Invalid IP format');
+  const { isIP } = await import('net');
+  if (!isIP(ip)) throw new Error('Invalid IP format: ' + ip);
   const cmd = `fail2ban-client set ${JAIL_NAME} unbanip ${ip}`;
   if (DEBUG) console.log('[bridge] Running:', cmd);
   await execAsync(cmd);

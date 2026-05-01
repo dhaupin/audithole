@@ -66,7 +66,7 @@ import { Emitter }      from './emitter.js';
   const fp = new Fingerprint();
   fp.onSignal = async (signal) => pluginHost.fire(HOOKS.FP_SIGNAL, signal);
 
-  const result = await fp.run(config.get('WINDOW_MS'), config.get('THRESHOLD'));
+  const result = await fp.run(config.get('WINDOW_MS'), config.get('THRESHOLD'), config.get('MOUSE_EVENTS_MIN'), config.get('MOUSE_DELTA_MIN'));
 
   // Plugins may filter the score
   const filteredScore = await pluginHost.filter(HOOKS.FP_COMPLETE, result.score, result);

@@ -35,6 +35,13 @@ const DEFAULTS = {
   TRAP_ESCALATE:         true,         // allow tier promotion if score rises
   TRAP_TIMER_SEED_MS:    800,          // first interval base delay
 
+  // Fingerprint tuning
+  // These need adjustment based on real traffic data.
+  // Raise MOUSE_EVENTS_MIN if legit users are getting flagged.
+  // Raise MOUSE_DELTA_MIN if bots are moving the mouse slightly to evade.
+  MOUSE_EVENTS_MIN:      3,    // min mouse move events to consider "human"
+  MOUSE_DELTA_MIN:       50,   // min total mouse delta (px) to consider "human"
+
   // Attribution
   SLUG_PATH_PREFIX:      '/t/',        // path prefix for slug URLs
 };

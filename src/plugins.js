@@ -232,6 +232,10 @@ export class PluginHost {
    * Must be called before registering plugins.
    */
   init({ config, logFn, emitFn }) {
+    if (this._sandbox) {
+      console.warn('[AUDITHOLE] PluginHost.init() called more than once -- ignoring. Do not load audithole.min.js twice.');
+      return;
+    }
     this._configRef = config;
     this._logFn = logFn;
     this._emitFn = emitFn;

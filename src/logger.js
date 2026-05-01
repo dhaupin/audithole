@@ -33,6 +33,7 @@ export class Logger {
     this._bound = {};
     this._flushTimer = null;
     this._dirty = false;
+    this._flushing = false;
   }
 
   _genId() {
@@ -98,7 +99,8 @@ export class Logger {
   // --- Flush to server ---
 
   async flush() {
-    if (!this._dirty) return;
+    if (!this._dirty || this._flushing) return;
+    this._flushing = true;
     this._dirty = false;
 
     const payload = {
@@ -123,6 +125,8 @@ export class Logger {
       });
     } catch (e) {
       // Silent fail -- never expose errors to potential attacker
+    } finally {
+      this._flushing = false;
     }
   }
 

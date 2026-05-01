@@ -65,7 +65,7 @@ export async function saveSession(kv, session) {
   } catch (e) {}
   recent.unshift(session.id);
   if (recent.length > 100) recent = recent.slice(0, 100);
-  await kv.put('index:recent', JSON.stringify(recent));
+  await kv.put('index:recent', JSON.stringify(recent), { expirationTtl: 60 * 60 * 24 * 90 }); // 90 day rolling TTL
 }
 
 export async function getSession(kv, id) {

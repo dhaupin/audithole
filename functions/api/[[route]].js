@@ -127,6 +127,9 @@ async function handleLog(request, kv, meta) {
     return json({ error: 'Missing sessionId' }, 400);
   }
 
+  // Strip then re-validate: defense-in-depth against KV key injection.
+  // We strip first (rather than reject) to be tolerant of minor encoding
+  // quirks from the client, then hard-reject if nothing meaningful remains.
   const cleanId = sessionId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
   if (!cleanId) return json({ error: 'Invalid sessionId' }, 400);
 

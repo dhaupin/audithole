@@ -64,18 +64,28 @@ export class Fingerprint {
   }
 
   _checkTimingJitter() {
-    // Real browsers have jitter in performance.now() due to Spectre mitigations
-    // Headless VMs often return suspiciously round numbers
-    const samples = [];
-    for (let i = 0; i < 10; i++) {
-      samples.push(performance.now());
+    // Headless VMs often have coarser or perfectly uniform timer resolution.
+    // We compare two performance.now() samples with a microtask gap between them.
+    // In real browsers with Spectre mitigations, sub-ms resolution is clamped
+    // and jittered, so the values are rarely identical across event loop ticks.
+    // A synchronous tight loop always gives 0 diffs even in real browsers
+    // (loop completes within one timer quantum), so we use a stored baseline
+    // from _attachListeners() instead -- sampled across real time.
+    //
+    // Heuristic: if performance.now() resolution appears to be exactly 1ms
+    // with no sub-ms component across 5 samples taken during the observation
+    // window, flag it. This catches VMs with 1ms clamped timers.
+    const samples = this._timingSamples || [];
+    if (samples.length < 3) {
+      return { signal: 'timing_jitter', weight: 15, hit: false };
     }
     const diffs = [];
     for (let i = 1; i < samples.length; i++) {
       diffs.push(samples[i] - samples[i - 1]);
     }
-    const allZero = diffs.every(d => d === 0);
-    return { signal: 'timing_jitter', weight: 15, hit: allZero };
+    // All diffs are whole milliseconds = suspiciously uniform
+    const allWhole = diffs.every(d => d > 0 && Number.isInteger(d));
+    return { signal: 'timing_jitter', weight: 15, hit: allWhole };
   }
 
   _checkNotificationAPI() {
@@ -88,10 +98,10 @@ export class Fingerprint {
     return { signal: 'notification_denied', weight: 5, hit: false };
   }
 
-  _checkMouseEntropy(windowMs = 4000) {
+  _checkMouseEntropy(windowMs = 4000, eventsMin = 3, deltaMin = 50) {
     const elapsed = performance.now() - this.startTime;
     if (elapsed < windowMs) return null; // not ready yet
-    const hit = this.mouseEvents < 3 && this.mouseDelta < 50;
+    const hit = this.mouseEvents < eventsMin && this.mouseDelta < deltaMin;
     return { signal: 'no_mouse_entropy', weight: 20, hit };
   }
 
@@ -109,6 +119,15 @@ export class Fingerprint {
   // --- Event tracking ---
 
   _attachListeners() {
+    // Collect timing samples spread across the observation window
+    this._timingSamples = [];
+    const sampleTiming = () => {
+      if (this._timingSamples.length < 6) {
+        this._timingSamples.push(performance.now());
+      }
+    };
+    this._timingSampleInterval = setInterval(sampleTiming, 250);
+
     this._bound.mouseMove = (e) => {
       this.mouseEvents++;
       this.mouseDelta += Math.abs(e.clientX - this.lastMouseX) + Math.abs(e.clientY - this.lastMouseY);
@@ -124,6 +143,10 @@ export class Fingerprint {
   }
 
   _detachListeners() {
+    if (this._timingSampleInterval) {
+      clearInterval(this._timingSampleInterval);
+      this._timingSampleInterval = null;
+    }
     document.removeEventListener('mousemove', this._bound.mouseMove);
     window.removeEventListener('scroll', this._bound.scroll);
     window.removeEventListener('focus', this._bound.focus);
@@ -145,7 +168,7 @@ export class Fingerprint {
       this._checkConnectionRtt(),
     ];
 
-    const mouseCheck = this._checkMouseEntropy();
+    const mouseCheck = this._checkMouseEntropy(this._windowMs, this._eventsMin, this._deltaMin);
     if (mouseCheck) checks.push(mouseCheck);
 
     let score = 0;
@@ -171,7 +194,10 @@ export class Fingerprint {
    * @param {number} windowMs - how long to observe before scoring
    * @returns {Promise<{score, signals, tier}>}
    */
-  async run(windowMs = 4500, threshold = 40) {
+  async run(windowMs = 4500, threshold = 40, eventsMin = 3, deltaMin = 50) {
+    this._windowMs   = windowMs;
+    this._eventsMin  = eventsMin;
+    this._deltaMin   = deltaMin;
     this._attachListeners();
 
     return new Promise((resolve) => {

@@ -8,9 +8,19 @@
     "build:dev": "esbuild src/audithole.js --bundle --format=iife --target=es2020 --sourcemap --outfile=dist/audithole.dev.js",
     "dev": "wrangler pages dev dist --compatibility-date=2024-01-01",
     "deploy": "npm run build && wrangler pages deploy dist",
-    "lint": "node --input-type=module < /dev/null || true"
+    "lint": "node --input-type=module < /dev/null || true",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
-  "keywords": ["honeypot","bot-detection","fingerprinting","cloudflare-pages","tarpit","waf"],
+  "keywords": [
+    "honeypot",
+    "bot-detection",
+    "fingerprinting",
+    "cloudflare-pages",
+    "tarpit",
+    "waf"
+  ],
   "author": "audithole contributors",
   "license": "MIT",
   "repository": {
@@ -19,7 +29,10 @@
   },
   "devDependencies": {
     "esbuild": "^0.20.0",
-    "wrangler": "^3.0.0"
+    "vitest": "^1.0.0",
+    "wrangler": "^3.0.0",
+    "@vitest/coverage-v8": "^1.0.0",
+    "jsdom": "^24.0.0"
   },
   "engines": {
     "node": ">=18.0.0"

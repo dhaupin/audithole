@@ -34,10 +34,13 @@ export async function onRequest(context) {
       return new Response('Not found', { status: 404 });
     }
 
-    // Serve dashboard.html with the secret injected for API calls
-    const dashReq  = new Request(new URL('/dashboard.html', url.origin), request);
-    const dashResp = await fetch(dashReq);
-    const html     = await dashResp.text();
+    // Serve dashboard.html with the secret injected for API calls.
+    // Must use env.ASSETS.fetch() -- bare fetch() in CF Pages Functions
+    // routes to the internet, not local static assets.
+    const dashAssetUrl = new URL('/dashboard.html', url.origin);
+    const dashResp = await env.ASSETS.fetch(new Request(dashAssetUrl));
+    if (!dashResp.ok) return new Response('Dashboard asset not found', { status: 502 });
+    const html = await dashResp.text();
 
     // Inject the secret into the page so the dashboard JS can call /api/*
     const injected = html.replace(
@@ -60,9 +63,10 @@ export async function onRequest(context) {
   //    The slug gets logged when audithole.js initializes.
   const slugMatch = path.match(/^\/t\/([a-zA-Z0-9_-]+)\/?$/);
   if (slugMatch) {
-    const indexReq  = new Request(new URL('/', url.origin), request);
-    const indexResp = await next();
+    // Tag the slug in context, serve index.html via ASSETS binding.
+    // Client-side Social.parseSlug() reads the slug from window.location.
     context.data.meta = { ip, ua, country, path, slug: slugMatch[1] };
+    const indexResp = await env.ASSETS.fetch(new Request(new URL('/', url.origin)));
     return addSecurityHeaders(indexResp);
   }
 

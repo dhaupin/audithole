@@ -20,7 +20,7 @@
  * @param {object} env - CF env bindings
  * @param {object} meta - { ip, ua, country } from middleware
  */
-export async function handleBan(request, env, meta, kv) {
+export async function handleBan(request, env, kv, meta) {
   const bridgeUrl    = env.FAIL2BAN_BRIDGE_URL;
   const bridgeSecret = env.FAIL2BAN_BRIDGE_SECRET;
 
@@ -76,7 +76,7 @@ export async function handleBan(request, env, meta, kv) {
  * @param {object} env
  * @param {object} kv
  */
-export async function handleUnban(request, env, kv) {
+export async function handleUnban(request, env, kv, meta = {}) {
   const bridgeSecret = env.FAIL2BAN_BRIDGE_SECRET;
   const provided     = request.headers.get('x-bridge-secret');
 
@@ -101,7 +101,7 @@ export async function handleUnban(request, env, kv) {
  * Handle GET /api/bans
  * List active ban records. Requires AUDITHOLE_SECRET.
  */
-export async function handleListBans(request, env, kv) {
+export async function handleListBans(request, env, kv, meta = {}) {
   const secret   = env.AUDITHOLE_SECRET;
   const provided = request.headers.get('x-audithole-secret');
   if (!secret || provided !== secret) return jsonResp({ error: 'Unauthorized' }, 401);
