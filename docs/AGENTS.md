@@ -15,24 +15,37 @@ on infrastructure the deployer owns.
 ## Project structure
 
 ```
-src/fingerprint.js    Weighted signal scoring (0-100)
-src/escape.js         SEO bot whitelist -- Googlebot etc. get clean pass-through
-src/traps.js          Timer-based slowdown layer (3 tiers)
-src/logger.js         Anonymous session event capture
-src/social.js         Slug attribution for trap links
-src/audithole.js      Orchestrator -- entry point
+src/                  Client-side source
+├── audithole.js      Orchestrator -- entry point
+├── config.js         Config loader
+├── fingerprint.js    Weighted signal scoring (0-100), 11 signals
+├── escape.js         SEO bot whitelist -- 20+ crawlers get clean pass-through
+├── traps.js          Timer-based slowdown layer (3 tiers)
+├── logger.js         Anonymous session event capture
+├── social.js         Slug attribution for trap links
+├── emitter.js        Outbound webhook layer (with retries)
+├── plugins.js        Plugin host, hook registry, sandbox
 functions/            Cloudflare Pages Functions (API + middleware)
+├── _middleware.js    Edge: dashboard, slug rewrite, headers, bot whitelist
+├── api/[[route]].js  API catch-all
+├── lib/session.js    Session model + KV adapter
+└── lib/pluginRoutes.js  Plugin route registry
 dist/                 Static assets + built client script
+plugins/              Plugin system
+├── official/fail2ban/  fail2ban integration + bridge server
+└── core/hook-injector/  Dev debugging plugin
 docs/                 Documentation including ETHICS.md
+ROADMAP.md            Future plans and feature ideas
 ```
 
 ## Key design decisions
 
-- Fingerprint scoring uses ~10 signals. Threshold 40 = trap activation.
+- Fingerprint scoring uses 11 signals. Threshold 40 = trap activation.
 - Known good crawlers are whitelisted at the edge in `functions/_middleware.js` before any JS runs.
 - Session data is anonymous. No keystrokes, no form values, no persistent cross-session IDs.
-- KV binding name: `AUDITHOLE_KV`. Secret env var: `AUDITHOLE_SECRET`.
-- All API routes under `/api/*` handled by `functions/api/[[route]].js`.
+- KV binding name: `AUDITHOLE_KV`. Secret env vars: `AUDITHOLE_SECRET`, `DASHBOARD_TOKEN`.
+- Core API routes under `/api/*` handled by `functions/api/[[route]].js`.
+- Plugin routes registered in `functions/lib/pluginRoutes.js` -- never edit `[[route]].js`.
 
 ## If you are here to audit or contribute
 
