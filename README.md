@@ -19,7 +19,33 @@ MIT License. Runs entirely on Cloudflare's free tier.
 | High confidence bot (score 70-89) | Timer flood + RAF hold, session logged |
 | Near-certain bot (score 90+) | All of the above escalated, session logged |
 
-Fingerprinting uses ~10 behavioral signals: `navigator.webdriver`, Playwright/Puppeteer global leaks, headless UA strings, missing `window.chrome`, timing jitter, mouse entropy, plugin count, language array, connection RTT. No PII beyond IP (stored server-side only). No keystrokes, no form values, no cross-site tracking.
+### How fingerprinting works
+
+AuditHole scores visitors 0-100 using behavioral signals. No PII beyond IP (server-side only). No keystrokes, no form values, no cross-site tracking.
+
+| Signal | Weight | What it detects |
+|---|---|---|
+| `navigator.webdriver` | 25 | Selenium/WebDriver automation |
+| Playwright globals (`__playwright`, etc.) | 25 | Playwright headless browsers |
+| Puppeteer globals (`__puppeteer__`, etc.) | 25 | Puppeteer/Playwright automation |
+| Headless UA string | 30 | User-agent claiming to be headless |
+| Missing `window.chrome` runtime | 15 | Chrome browser claiming with no Chrome APIs |
+| No language array | 10 | Missing `navigator.languages` |
+| No plugins | 10 | No PDF reader, Flash, etc. |
+| Timing jitter absence | 15 | Uniform timer resolution (VMs) |
+| Notification permission denied | 5 | Broken notification API |
+| Zero connection RTT | 10 | Perfect network timing |
+| Low mouse entropy | 20 | Few mouse events, little movement |
+
+### How traps work
+
+**Tier 1 (40-69):** Timer flood -- multiple staggered `setInterval` calls keep the event loop busy, preventing `networkIdle` from resolving. Bots waiting for page quiescence get stuck.
+
+**Tier 2 (70-89):** Adds an off-screen RAF storm -- a `requestAnimationFrame` loop drawing to a hidden canvas keeps the browser's rendering thread busy.
+
+**Tier 3 (90+):** Adds a second escalated timer layer with higher density.
+
+Traps are designed to slow, not crash. Real users won't notice. Headless agents waiting for page readiness will hang indefinitely.
 
 ---
 
@@ -128,6 +154,15 @@ The URL path is the authentication. There is no login page to probe -- a wrong o
 - Create a new attribution trap link with an optional label
 - Copy the `/t/slug` URL to use on your own properties
 
+### Network tarpit
+
+The `/api/hang` endpoint provides a slow-drain connection for additional tarpitting. It writes a space byte every 5 seconds for 45 seconds, keeping HTTP connections open without completing. Use this for scripts that explicitly fetch from your domain.
+
+```bash
+# Example: fetch in your page to add network tarpit
+fetch('/api/hang');
+```
+
 ---
 
 ## Attribution slugs
@@ -162,22 +197,53 @@ Key options:
 
 ```js
 window.__AUDITHOLE_CONFIG = {
-  ENDPOINT:           '/api/log',  // log endpoint
-  THRESHOLD:          40,          // score to activate traps (0-100)
-  WINDOW_MS:          4500,        // observation window in ms
-  DEBUG:              false,       // console logging (dev only)
-  PLUGINS_ENABLED:    true,
-  ALLOW_SCRIPT_HOOKS: false,       // see Plugin system below
+  ENDPOINT:           '/api/log',     // log endpoint (can be absolute URL)
+  THRESHOLD:          40,            // score to activate traps (0-100)
+  WINDOW_MS:          4500,          // observation window in ms
+  DEBUG:              false,         // console logging (dev only)
+  PLUGINS_ENABLED:    true,          // enable plugin system
+  ALLOW_SCRIPT_HOOKS: false,         // allow string-based script hooks
+  MOUSE_EVENTS_MIN:   3,             // min mouse events before scoring
+  MOUSE_DELTA_MIN:    50,            // min cumulative mouse movement (px)
+  WEBHOOK_MAX_RETRIES: 3,           // retries for outbound events
+  WEBHOOK_TIMEOUT_MS:  5000,         // timeout for outbound events
 };
 ```
 
 Full reference in `docs/README.md`.
+
+### SEO bot whitelist
+
+Known good crawlers are identified and bypassed at the Cloudflare edge layer *before* any JavaScript runs. This means:
+
+- Zero SEO impact -- Googlebot, Bingbot, and 20+ others see a clean page
+- No fingerprinting code executes for whitelisted crawlers
+- No session is created, no trap is injected
+
+Whitelist includes: Googlebot, Bingbot, Slurp, DuckDuckBot, Baiduspider, Yandexbot, Facebot, IA Archiver, SemrushBot, AhrefsBot, MJ12bot, Dotbot, Rogerbot, LinkedInBot, Twitterbot, Applebot, PetalBot, Bytespider, GPTBot, ClaudeBot, Anthropic-AI, CCBot, Chrome-Lighthouse
+
+The whitelist check runs in `_middleware.js` at the edge and again in `escape.js` client-side as a safety net.
 
 ---
 
 ## Plugin system
 
 Plugins hook into the fingerprint lifecycle, session events, trap activation, and outbound events. They run in a sandboxed API -- no direct `window` or `fetch` access.
+
+### Available hooks
+
+```js
+ah.hooks.HOOKS.INIT           // AuditHole initialized, config loaded
+ah.hooks.HOOKS.FP_START        // Fingerprinting observation window started
+ah.hooks.HOOKS.FP_SIGNAL       // Individual signal check fired
+ah.hooks.HOOKS.FP_COMPLETE     // Fingerprinting complete, score available
+ah.hooks.HOOKS.TRAP_EVALUATE  // Trap tier calculated, before activation
+ah.hooks.HOOKS.TRAP_ACTIVATE  // Trap activated
+ah.hooks.HOOKS.SLUG_HIT        // Attribution slug clicked
+ah.hooks.HOOKS.READY           // All initialization complete
+```
+
+### Example plugin
 
 ```js
 window.__AUDITHOLE_PLUGINS = [
@@ -196,6 +262,15 @@ window.__AUDITHOLE_PLUGINS = [
     }
   }
 ];
+```
+
+### Built-in emit events
+
+```js
+ah.emit('outbound:webhook', { url, body })   // POST to any URL
+ah.emit('outbound:ban', { ip, score, note })   // Trigger fail2ban ban
+ah.emit('outbound:unban', { ip, note })        // Trigger fail2ban unban
+ah.emit('outbound:alert', { message, severity }) // Log alert
 ```
 
 **Adding plugin routes (no core editing required)**
@@ -301,12 +376,12 @@ audithole/
 ├── src/                        Client-side source
 │   ├── audithole.js            Orchestrator (entry point)
 │   ├── config.js               Config loader
-│   ├── fingerprint.js          Weighted signal scoring
-│   ├── escape.js               SEO bot whitelist
+│   ├── fingerprint.js          Weighted signal scoring (10+ signals)
+│   ├── escape.js               SEO bot whitelist (20+ crawlers)
 │   ├── traps.js                Timer-based slowdown (3 tiers)
 │   ├── logger.js               Anonymous session capture
 │   ├── social.js               Slug attribution
-│   ├── emitter.js              Outbound webhook layer
+│   ├── emitter.js              Outbound webhook layer (with retries)
 │   └── plugins.js              Plugin host, hook registry, sandbox
 ├── functions/                  Cloudflare Pages Functions (server-side)
 │   ├── _middleware.js          Edge: dashboard route, slug rewrite, headers
@@ -337,6 +412,7 @@ audithole/
 │   ├── ETHICS.md               Design boundaries and what we didn't build
 │   └── AGENTS.md               AI agent onboarding (yes, really)
 ├── audithole.config.js         Example config (copy to your project)
+├── ROADMAP.md                  Future plans and feature ideas
 ├── package.json
 ├── wrangler.toml
 └── LICENSE                     MIT
@@ -348,7 +424,7 @@ audithole/
 
 | Collected | Not collected |
 |---|---|
-| IP address (server-side only, never in API responses) | Keystrokes or typed content |
+| IP address (server-side only, never exposed to clients) | Keystrokes or typed content |
 | User-agent string | Form field values |
 | Fingerprint score + signals hit | Precise cursor coordinates |
 | Pages visited + timestamps | Clipboard contents |
@@ -357,6 +433,19 @@ audithole/
 | Session duration | |
 | Trap tier activated | |
 | Country (from Cloudflare headers) | |
+| Language + screen resolution + viewport size | |
+| Visibility changes (tab hidden/shown) | |
+
+### Security headers
+
+Every response from your AuditHole deployment includes:
+
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: SAMEORIGIN`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+- `Content-Security-Policy` (strict, self-referencing)
+- `X-Robots-Tag: noindex` (dashboard only)
 
 ---
 
