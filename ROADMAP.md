@@ -142,8 +142,11 @@ Result: One dashboard showing bot fingerprints from all sites
 ## v2.1 — Enterprise Features
 
 ### Rate Limiting & Throttling
-- [ ] IP-based rate limiting on `/api/log` endpoint (prevent log flooding)
-- [ ] Per-session event throttling (cap events per session to prevent abuse)
+- [x] IP-based rate limiting on `/api/log` endpoint (fixed-window per-IP
+      counter in `functions/lib/ratelimit.js`; pairs with a CF Rate Limiting
+      rule for the hard ceiling - see audithole#3)
+- [x] Per-session event throttling (events and pageviews capped per session
+      in `functions/lib/session.js`; see audithole#2)
 - [ ] Optional IP blocklist import (for known bad actors)
 
 ### Multi-Site Support

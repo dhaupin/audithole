@@ -42,10 +42,16 @@ export async function onRequest(context) {
     if (!dashResp.ok) return new Response('Dashboard asset not found', { status: 502 });
     const html = await dashResp.text();
 
-    // Inject the secret into the page so the dashboard JS can call /api/*
+    // Inject the secret into the page so the dashboard JS can call /api/*.
+    // JSON.stringify handles quotes and backslashes; escaping `<` keeps a
+    // literal `</script>` in the secret from closing the inline script block;
+    // the replacer FUNCTION keeps `$&`/`$'`/`$1` patterns in the secret
+    // literal instead of letting String.replace expand them. A literal splice
+    // would let any of these break the page (audithole#4).
+    const safeSecret = JSON.stringify(env.AUDITHOLE_SECRET || '').replace(/</g, '\\u003c');
     const injected = html.replace(
       'window.__AH_SECRET || \'\'',
-      `'${env.AUDITHOLE_SECRET || ''}'`
+      () => 'window.__AH_SECRET = ' + safeSecret + ' || \'\''
     );
 
     return new Response(injected, {

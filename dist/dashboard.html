@@ -336,7 +336,7 @@
       const slug = s.slug ? `<span class="mono" style="color:var(--blue)">${esc(s.slug)}</span>` : '<span style="color:var(--muted)">—</span>';
       const ua = (s.ua || '').slice(0, 60);
 
-      return `<tr onclick="showDetail('${s.id}')">
+      return `<tr onclick="showDetail('${esc(s.id)}')">
         <td class="mono" style="color:var(--muted)">${s.id.slice(0,12)}…</td>
         <td>${slug}</td>
         <td>
@@ -373,7 +373,7 @@
       : '<span style="color:var(--muted)">none</span>';
 
     const evHtml = events.length
-      ? `<ul class="event-list">${events.map(e => `<li><span class="ms">+${e.ms}ms</span><span class="et">${esc(e.type)}</span></li>`).join('')}</ul>`
+      ? `<ul class="event-list">${events.map(e => `<li><span class="ms">+${esc(e.ms)}ms</span><span class="et">${esc(e.type)}</span></li>`).join('')}</ul>`
       : '<span style="color:var(--muted)">none</span>';
 
     document.getElementById('detail-body').innerHTML = `
@@ -384,8 +384,8 @@
       <div class="detail-row"><div class="detail-key">Trap Tier</div><div class="detail-val"><span class="badge t${s.trapTier||0}">T${s.trapTier||0}</span></div></div>
       <div class="detail-row"><div class="detail-key">Signals</div><div class="detail-val">${sigHtml}</div></div>
       <div class="detail-row"><div class="detail-key">Duration</div><div class="detail-val mono">${Math.round((s.duration||0)/1000)}s</div></div>
-      <div class="detail-row"><div class="detail-key">Scroll Depth</div><div class="detail-val mono">${s.maxScrollDepth||0}%</div></div>
-      <div class="detail-row"><div class="detail-key">Clicks</div><div class="detail-val mono">${s.clicks?.total||0}</div></div>
+      <div class="detail-row"><div class="detail-key">Scroll Depth</div><div class="detail-val mono">${esc(s.maxScrollDepth||0)}%</div></div>
+      <div class="detail-row"><div class="detail-key">Clicks</div><div class="detail-val mono">${esc(s.clicks?.total||0)}</div></div>
       <div class="detail-row"><div class="detail-key">Language</div><div class="detail-val">${esc(s.language||'—')}</div></div>
       <div class="detail-row"><div class="detail-key">Screen</div><div class="detail-val mono">${esc(s.screen||'—')}</div></div>
       <div class="detail-row"><div class="detail-key">UA</div><div class="detail-val" style="font-size:11px">${esc((s.ua||'').slice(0,200))}</div></div>
@@ -468,7 +468,7 @@
 
   // -- Utils --
   function esc(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   function timeAgo(ts) {
