@@ -464,4 +464,6 @@ Read `docs/ETHICS.md` for the full design rationale. The short version:
 
 MIT. See `LICENSE`.
 
+- **The workshop** -> [Creadev.org](https://creadev.org) (AuditHole is made by Rook @ Creadev.org - the same home as the rest of the struct family)
+
 Built to reduce noise, not create it.
