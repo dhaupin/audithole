@@ -28,7 +28,9 @@ src/                  Client-side source
 functions/            Cloudflare Pages Functions (API + middleware)
 ├── _middleware.js    Edge: dashboard, slug rewrite, headers, bot whitelist
 ├── api/[[route]].js  API catch-all
-├── lib/session.js    Session model + KV adapter
+├── lib/session.js    Session model + KV adapter (capped rows)
+├── lib/intake.js     /api/log field coercion (XSS-safe intake)
+├── lib/ratelimit.js  Per-IP fixed-window throttle for /api/log
 └── lib/pluginRoutes.js  Plugin route registry
 dist/                 Static assets + built client script
 plugins/              Plugin system

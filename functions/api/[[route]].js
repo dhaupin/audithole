@@ -22,6 +22,8 @@ import {
   getRecentSessions,
   getSlugSessions,
 } from '../lib/session.js';
+import { sanitizeLogBody, MAX_EVENTS, MAX_PAGEVIEWS } from '../lib/intake.js';
+import { checkRateLimit }  from '../lib/ratelimit.js';
 import { Social }            from '../../src/social.js';
 import { matchPluginRoute }  from '../lib/pluginRoutes.js';
 
@@ -120,51 +122,46 @@ async function handleLog(request, kv, meta) {
     return json({ error: 'Invalid JSON' }, 400);
   }
 
-  const { sessionId, slug, duration, ua, language, screen, viewport,
-          clicks, maxScrollDepth, events } = body;
+  // Per-IP throttle first: it is the cheapest guard against the forged-id
+  // flood (audithole#3) and it runs before any KV session write.
+  const ip = meta.ip || 'unknown';
+  const rl = await checkRateLimit(kv, ip);
+  if (!rl.allowed) {
+    return json({ error: 'Rate limit exceeded' }, 429, { 'Retry-After': String(rl.retryAfter) });
+  }
 
-  if (!sessionId || typeof sessionId !== 'string') {
+  const clean = sanitizeLogBody(body);
+  if (!clean.sessionId) {
     return json({ error: 'Missing sessionId' }, 400);
   }
 
-  // Strip then re-validate: defense-in-depth against KV key injection.
-  // We strip first (rather than reject) to be tolerant of minor encoding
-  // quirks from the client, then hard-reject if nothing meaningful remains.
-  const cleanId = sessionId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
-  if (!cleanId) return json({ error: 'Invalid sessionId' }, 400);
-
-  let session = await getSession(kv, cleanId);
+  let session = await getSession(kv, clean.sessionId);
   if (!session) {
     session = createSession({
-      id:      cleanId,
-      slug:    (slug || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 60) || null,
-      ip:      meta.ip || 'unknown',
-      ua:      (ua || meta.ua || '').slice(0, 512),
+      id:      clean.sessionId,
+      slug:    clean.slug,
+      ip,
+      ua:      clean.ua || meta.ua || '',
       country: meta.country || 'unknown',
     });
   }
 
-  session.duration       = duration || session.duration;
-  session.language       = (language || '').slice(0, 20);
-  session.screen         = (screen || '').slice(0, 20);
-  session.viewport       = (viewport || '').slice(0, 20);
-  session.clicks         = clicks || session.clicks;
-  session.maxScrollDepth = maxScrollDepth || session.maxScrollDepth;
+  if (clean.duration       !== null) session.duration       = clean.duration;
+  if (clean.language       !== null) session.language       = clean.language;
+  if (clean.screen         !== null) session.screen         = clean.screen;
+  if (clean.viewport       !== null) session.viewport       = clean.viewport;
+  if (clean.clicks         !== null) session.clicks         = clean.clicks;
+  if (clean.maxScrollDepth !== null) session.maxScrollDepth = clean.maxScrollDepth;
 
-  if (Array.isArray(events)) {
-    for (const ev of events) {
-      if (!ev || !ev.type) continue;
-      if (ev.type === 'fingerprint') {
-        session.fingerprint = { score: ev.score, signals: ev.signals };
-      }
-      if (ev.type === 'trap_activated') session.trapTier = ev.tier;
-      if (ev.type === 'pageview') {
-        session.pageviews.push({ path: (ev.path || '').slice(0, 200), ms: ev.ms });
-      }
-      session.events.push({ type: ev.type, ms: ev.ms });
-    }
-    if (session.events.length > 200) session.events = session.events.slice(-200);
-  }
+  // events/pageviews arrive already coerced and capped by the sanitizer.
+  if (clean.fingerprint) session.fingerprint = clean.fingerprint;
+  if (clean.trapTier !== null) session.trapTier = clean.trapTier;
+
+  for (const ev of clean.events) session.events.push(ev);
+  if (session.events.length > MAX_EVENTS) session.events = session.events.slice(-MAX_EVENTS);
+
+  for (const pv of clean.pageviews) session.pageviews.push(pv);
+  if (session.pageviews.length > MAX_PAGEVIEWS) session.pageviews = session.pageviews.slice(-MAX_PAGEVIEWS);
 
   await saveSession(kv, session);
   return json({ ok: true });
@@ -196,10 +193,10 @@ function handleHang() {
 
 function stripIP({ ip, ...rest }) { return rest; }
 
-function json(data, status = 200) {
+function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...extraHeaders },
   });
 }
 

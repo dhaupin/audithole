@@ -6,7 +6,20 @@
  *   session:{id}      → full session object (TTL: 30 days)
  *   slug:{slug}       → slug metadata + session id list (TTL: 90 days)
  *   index:recent      → last 100 session ids (no TTL, rolling)
+ *
+ * The session row is the one unbounded axis in this schema (audithole#2): the
+ * beacon can append pageviews on every POST, and saveSession re-stamps the
+ * 30-day TTL each time, so a periodically-poked row never expires and keeps
+ * growing. Both are bounded here - pageviews are capped like events, and the
+ * serialized row is trimmed to a hard byte ceiling before it is written.
  */
+
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
+const SLUG_TTL_SECONDS = 60 * 60 * 24 * 90; // 90 days
+const RECENT_TTL_SECONDS = 60 * 60 * 24 * 90; // 90 day rolling TTL
+
+export const MAX_PAGEVIEWS = 200;
+const MAX_ROW_BYTES = 256 * 1024; // 256 KB ceiling on a serialized session row
 
 export function createSession({ id, slug, ip, ua, country }) {
   return {
@@ -27,12 +40,39 @@ export function createSession({ id, slug, ip, ua, country }) {
   };
 }
 
+/**
+ * Trim a session row to the storage ceilings: pageviews capped like events,
+ * and the serialized row trimmed (oldest events/pageviews dropped) until it
+ * fits MAX_ROW_BYTES. Mutates and returns the session.
+ */
+export function capSession(session) {
+  if (Array.isArray(session.pageviews) && session.pageviews.length > MAX_PAGEVIEWS) {
+    session.pageviews = session.pageviews.slice(-MAX_PAGEVIEWS);
+  }
+
+  let json = JSON.stringify(session);
+  while (json.length > MAX_ROW_BYTES) {
+    // Drop oldest rows first; events and pageviews are the only growing axes.
+    const events = session.events || [];
+    const pageviews = session.pageviews || [];
+    if (events.length === 0 && pageviews.length === 0) break;
+    if (events.length >= pageviews.length && events.length > 0) {
+      session.events = events.slice(Math.ceil(events.length / 2));
+    } else if (pageviews.length > 0) {
+      session.pageviews = pageviews.slice(Math.ceil(pageviews.length / 2));
+    }
+    json = JSON.stringify(session);
+  }
+  return session;
+}
+
 export async function saveSession(kv, session) {
   session.updated = Date.now();
+  capSession(session);
   await kv.put(
     `session:${session.id}`,
     JSON.stringify(session),
-    { expirationTtl: 60 * 60 * 24 * 30 } // 30 days
+    { expirationTtl: SESSION_TTL_SECONDS } // 30 days
   );
 
   // Update slug index
@@ -53,7 +93,7 @@ export async function saveSession(kv, session) {
       }
     }
     await kv.put(slugKey, JSON.stringify(slugMeta), {
-      expirationTtl: 60 * 60 * 24 * 90
+      expirationTtl: SLUG_TTL_SECONDS
     });
   }
 
@@ -65,7 +105,7 @@ export async function saveSession(kv, session) {
   } catch (e) {}
   recent.unshift(session.id);
   if (recent.length > 100) recent = recent.slice(0, 100);
-  await kv.put('index:recent', JSON.stringify(recent), { expirationTtl: 60 * 60 * 24 * 90 }); // 90 day rolling TTL
+  await kv.put('index:recent', JSON.stringify(recent), { expirationTtl: RECENT_TTL_SECONDS }); // 90 day rolling TTL
 }
 
 export async function getSession(kv, id) {
